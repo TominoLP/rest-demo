@@ -28,6 +28,18 @@ app.get('/items', (req, res) => {
     });
   }
 
+  if (simulate === 'bad-gateway') {
+    return res.status(502).json({
+      error: '502 Bad Gateway: Upstream-Service hat eine ungültige Antwort geliefert.',
+    });
+  }
+
+  if (simulate === 'service-unavailable') {
+    return res.status(503).json({
+      error: '503 Service Unavailable: Service ist temporär nicht erreichbar.',
+    });
+  }
+
   if (simulate === 'unauthorized') {
     return res.status(401).json({
       error: '401 Unauthorized: Es fehlt ein gültiges Token oder Login.',

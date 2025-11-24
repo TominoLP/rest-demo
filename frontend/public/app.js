@@ -15,9 +15,10 @@ const modalCloseBtn = document.getElementById('modal-close');
 const modalMethod = document.getElementById('modal-method');
 const modalTitle = document.getElementById('modal-title');
 const modalDesc = document.getElementById('modal-description');
-const modalUrl = document.getElementById('modal-url');
 const modalStatus = document.getElementById('modal-status');
 const modalStatusInfo = document.getElementById('modal-status-info');
+const modalTime = document.getElementById('modal-time');
+const modalSize = document.getElementById('modal-size');
 const modalRequest = document.getElementById('modal-request');
 const modalResponse = document.getElementById('modal-response');
 const trigger400Btn = document.getElementById('trigger-400');
@@ -25,37 +26,60 @@ const trigger401Btn = document.getElementById('trigger-401');
 const trigger403Btn = document.getElementById('trigger-403');
 const trigger404Btn = document.getElementById('trigger-404');
 const trigger500Btn = document.getElementById('trigger-500');
+const trigger502Btn = document.getElementById('trigger-502');
+const trigger503Btn = document.getElementById('trigger-503');
 const trigger418Btn = document.getElementById('trigger-418');
+const textEncoder = new TextEncoder();
 
 const showStatus = (message, isError = false) => {
   statusEl.textContent = message;
   statusEl.style.color = isError ? '#c0392b' : '#0b8457';
 };
 
-const formatPayload = (payload) => {
+const serializePayload = (payload) => {
   if (payload === undefined || payload === null || payload === '') {
-    return '—';
+    return '';
   }
   if (Array.isArray(payload)) {
     return payload.length ? JSON.stringify(payload, null, 2) : '[]';
   }
-  if (typeof payload === 'object' && Object.keys(payload).length === 0) {
-    return '—';
+  if (typeof payload === 'object') {
+    return Object.keys(payload).length ? JSON.stringify(payload, null, 2) : '';
   }
-  return JSON.stringify(payload, null, 2);
+  return String(payload);
+};
+
+const formatPayload = (payload) => {
+  const serialized = serializePayload(payload);
+  return serialized === '' ? '—' : serialized;
+};
+
+const payloadBytes = (payload) => {
+  const serialized = serializePayload(payload);
+  if (serialized === '') {
+    return 0;
+  }
+
+  try {
+    return textEncoder.encode(serialized).length;
+  } catch (error) {
+    return serialized.length;
+  }
 };
 
 const explainStatus = (status, isError) => {
   const map = {
     200: 'Alles okay – die Anfrage war erfolgreich.',
     201: 'Erstellt – der Server hat eine neue Ressource angelegt.',
-    204: 'Kein Inhalt – die Aktion war erfolgreich, liefert aber keinen Body.',
+    204: 'Kein Inhalt – erfolgreiche Aktion ohne Response-Body.',
     400: 'Ungültige Client-Anfrage: Pflichtfelder oder Datentypen verletzen das Schema.',
     401: 'Nicht autorisiert: Ressource verlangt gültige Authentifizierung vom Client.',
     403: 'Verboten: Authentifizierter Client besitzt keine Berechtigung für diese Ressource.',
     404: 'Nicht gefunden: Unter der URI existiert keine Ressource.',
-    418: 'RFC 2324 Status – 1. April 1997: "Ich bin eine Teekanne".',
+    418: 'RFC 2324 Status – demonstriert den Umgang mit nicht standardisierten Codes.',
     500: 'Interner Serverfehler – ungefangene Exception.',
+    502: 'Bad Gateway – Upstream-Service lieferte eine ungültige Antwort.',
+    503: 'Service Unavailable – Dienst temporär nicht erreichbar.',
   };
   if (map[status]) {
     return map[status];
@@ -71,15 +95,30 @@ const closeModal = () => {
   document.body.style.overflow = '';
 };
 
-const openModal = ({ method, url, status, statusText, title, description, requestBody, responseBody, isError = false }) => {
+const openModal = ({
+  method,
+  status,
+  statusText,
+  title,
+  description,
+  requestBody,
+  responseBody,
+  isError = false,
+  timestamp = Date.now(),
+}) => {
   modalMethod.textContent = method || '-';
   modalTitle.textContent = title || 'Aktion';
   modalDesc.textContent = description || '';
-  modalUrl.textContent = url || '-';
   modalStatus.textContent = status ? `${status} ${statusText || ''}`.trim() : 'unbekannt';
   modalStatusInfo.textContent = explainStatus(status, isError);
-  modalRequest.textContent = formatPayload(requestBody);
-  modalResponse.textContent = formatPayload(responseBody);
+  modalTime.textContent = new Date(timestamp).toLocaleString();
+  const requestText = formatPayload(requestBody);
+  const responseText = formatPayload(responseBody);
+  modalRequest.textContent = requestText;
+  modalResponse.textContent = responseText;
+  const reqBytes = payloadBytes(requestBody);
+  const resBytes = payloadBytes(responseBody);
+  modalSize.textContent = `Req ${reqBytes} B · Res ${resBytes} B`;
   modalEl.removeAttribute('hidden');
   document.body.style.overflow = 'hidden';
 };
@@ -562,6 +601,88 @@ const triggerServerError = async () => {
   }
 };
 
+const triggerBadGateway = async () => {
+  const endpoint = `${itemsEndpoint}?simulate=bad-gateway`;
+  try {
+    const res = await fetch(endpoint);
+    const payload = await res.json().catch(() => ({}));
+    if (res.ok) {
+      showStatus('Unerwartet: 502-Demo lieferte Erfolg.');
+      openModal({
+        method: 'GET',
+        url: endpoint,
+        status: res.status,
+        statusText: res.statusText,
+        title: 'GET /items (Demo)',
+        description: 'Diese Demo sollte einen 502 liefern, hat aber geklappt.',
+        responseBody: payload,
+      });
+      return;
+    }
+    showStatus('502-Demo ausgelöst');
+    openModal({
+      method: 'GET',
+      url: endpoint,
+      status: res.status,
+      statusText: res.statusText,
+      title: '502 BAD GATEWAY',
+      description: 'Proxy oder API-Gateway erhielt eine ungültige Antwort vom Upstream-Service (HTTP 502).',
+      responseBody: payload,
+      isError: true,
+    });
+  } catch (error) {
+    showStatus(error.message, true);
+    openModal({
+      method: 'GET',
+      url: endpoint,
+      title: 'Fehler bei 502-Demo',
+      description: error.message,
+      isError: true,
+    });
+  }
+};
+
+const triggerServiceUnavailable = async () => {
+  const endpoint = `${itemsEndpoint}?simulate=service-unavailable`;
+  try {
+    const res = await fetch(endpoint);
+    const payload = await res.json().catch(() => ({}));
+    if (res.ok) {
+      showStatus('Unerwartet: 503-Demo lieferte Erfolg.');
+      openModal({
+        method: 'GET',
+        url: endpoint,
+        status: res.status,
+        statusText: res.statusText,
+        title: 'GET /items (Demo)',
+        description: 'Diese Demo sollte einen 503 liefern, hat aber geklappt.',
+        responseBody: payload,
+      });
+      return;
+    }
+    showStatus('503-Demo ausgelöst');
+    openModal({
+      method: 'GET',
+      url: endpoint,
+      status: res.status,
+      statusText: res.statusText,
+      title: '503 SERVICE UNAVAILABLE',
+      description: 'Service signalisiert temporäre Nichtverfügbarkeit, z. B. Wartung oder Überlast (HTTP 503).',
+      responseBody: payload,
+      isError: true,
+    });
+  } catch (error) {
+    showStatus(error.message, true);
+    openModal({
+      method: 'GET',
+      url: endpoint,
+      title: 'Fehler bei 503-Demo',
+      description: error.message,
+      isError: true,
+    });
+  }
+};
+
 const triggerTeapot = async () => {
   const endpoint = `${itemsEndpoint}?simulate=teapot`;
   try {
@@ -608,6 +729,8 @@ trigger401Btn.addEventListener('click', triggerUnauthorized);
 trigger403Btn.addEventListener('click', triggerForbidden);
 trigger404Btn.addEventListener('click', triggerNotFound);
 trigger500Btn.addEventListener('click', triggerServerError);
+trigger502Btn.addEventListener('click', triggerBadGateway);
+trigger503Btn.addEventListener('click', triggerServiceUnavailable);
 trigger418Btn.addEventListener('click', triggerTeapot);
 
 // Load initial state

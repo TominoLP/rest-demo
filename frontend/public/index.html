@@ -435,6 +435,8 @@
             <button type="button" class="btn-secondary" id="trigger-403">403 FORBIDDEN</button>
             <button type="button" class="btn-secondary" id="trigger-404">404 NOT FOUND</button>
             <button type="button" class="btn-danger" id="trigger-500">500 SERVER ERROR</button>
+            <button type="button" class="btn-danger" id="trigger-502">502 BAD GATEWAY</button>
+            <button type="button" class="btn-danger" id="trigger-503">503 SERVICE UNAVAILABLE</button>
             <button type="button" class="btn-teapot" id="trigger-418">418 I'M A TEAPOT</button>
           </div>
         </section>
@@ -454,8 +456,14 @@
             <small id="modal-status-info">Alles hat funktioniert</small>
           </div>
           <div>
-            <span>Endpoint</span>
-            <strong id="modal-url">/items</strong>
+            <span>Zeitstempel</span>
+            <strong id="modal-time">–</strong>
+            <small>Lokale Ausführungszeit</small>
+          </div>
+          <div>
+            <span>Datenvolumen</span>
+            <strong id="modal-size">Req 0 B · Res 0 B</strong>
+            <small>JSON-Bytes der Payloads</small>
           </div>
         </div>
         <div class="modal-payload">
