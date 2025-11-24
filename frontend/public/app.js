@@ -1,12 +1,5 @@
-const localHosts = new Set(['localhost', '127.0.0.1']);
-const shouldUseProxy =
-  localHosts.has(window.location.hostname) && window.location.port && window.location.port !== '3000';
-const apiRoot = shouldUseProxy
-  ? ''
-  : localHosts.has(window.location.hostname)
-        ? 'http://localhost:3000' 
-        : 'http://91.99.61.249:6970';
-const itemsEndpoint = shouldUseProxy ? '/items' : `${apiRoot}/items`;
+const itemsEndpoint = '/items';
+const itemById = (id) => `${itemsEndpoint}/${id}`;
 
 const fetchBtn = document.getElementById('fetch-btn');
 const itemsContainer = document.getElementById('items');
@@ -21,12 +14,15 @@ const modalTitle = document.getElementById('modal-title');
 const modalDesc = document.getElementById('modal-description');
 const modalStatusLine = document.getElementById('modal-status-line');
 const modalStatusInfo = document.getElementById('modal-status-info');
+const modalStatusBlock = document.getElementById('modal-status-block');
 const modalSize = document.getElementById('modal-size');
 const modalRequest = document.getElementById('modal-request');
 const modalResponse = document.getElementById('modal-response');
 const modalHeaders = document.getElementById('modal-headers');
 const modalMore = document.getElementById('modal-more');
 const modalMoreBtn = document.getElementById('modal-more-btn');
+const modalImageWrapper = document.getElementById('modal-image-wrapper');
+const modalImage = document.getElementById('modal-image');
 const textEncoder = new TextEncoder();
 const trigger400Btn = document.getElementById('trigger-400');
 const trigger401Btn = document.getElementById('trigger-401');
@@ -128,17 +124,26 @@ const openModal = ({
   status,
   statusText,
   title,
-  description,
+  subtitle,
   requestBody,
   responseBody,
   headers,
   isError = false,
+  showStatusMeta = true,
+  image,
 }) => {
   modalMethod.textContent = method || '-';
   modalTitle.textContent = title || 'Aktion';
-  modalDesc.textContent = description || '';
-  modalStatusLine.textContent = status ? `${status} ${statusText || ''}`.trim() : 'unbekannt';
-  modalStatusInfo.textContent = explainStatus(status, isError);
+  modalDesc.textContent = subtitle || '';
+  modalStatusLine.textContent = explainStatus(status, isError);
+  modalStatusInfo.textContent = status ? `${status} ${statusText || ''}`.trim() : '';
+  if (modalStatusBlock) {
+    if (showStatusMeta) {
+      modalStatusBlock.classList.remove('hidden');
+    } else {
+      modalStatusBlock.classList.add('hidden');
+    }
+  }
   modalHeaders.textContent = formatHeadersBlock(headers);
   const requestText = formatPayload(requestBody);
   const responseText = formatPayload(responseBody);
@@ -147,6 +152,16 @@ const openModal = ({
   const reqBytes = payloadBytes(requestBody);
   const resBytes = payloadBytes(responseBody);
   modalSize.textContent = `Req ${reqBytes} B · Res ${resBytes} B`;
+  if (modalImageWrapper && modalImage) {
+    if (image && image.src) {
+      modalImageWrapper.classList.remove('hidden');
+      modalImage.src = image.src;
+      modalImage.alt = image.alt || 'Status Illustration';
+    } else {
+      modalImageWrapper.classList.add('hidden');
+      modalImage.src = '';
+    }
+  }
   modalEl.removeAttribute('hidden');
   modalEl.classList.add('flex');
   setMoreVisibility(false);
@@ -192,7 +207,7 @@ const fetchItems = async ({ withModal = false } = {}) => {
                 status: res.status,
         statusText: res.statusText,
         title: 'GET /items',
-        description: 'Alle Artikel wurden erfolgreich aus dem Speicher geladen.',
+        subtitle: 'Alle Artikel wurden erfolgreich aus dem Speicher geladen.',
         responseBody: items,
         headers: responseHeaders,
       });
@@ -206,7 +221,7 @@ const fetchItems = async ({ withModal = false } = {}) => {
                 status: error.meta?.status,
         statusText: error.meta?.statusText,
         title: 'Fehler bei GET /items',
-        description: error.message,
+        subtitle: error.message,
         responseBody: error.meta?.responseBody,
         headers: error.meta?.headers || [],
         isError: true,
@@ -248,7 +263,7 @@ const addItem = async (name, quantity) => {
             status: res.status,
       statusText: res.statusText,
       title: 'POST /items',
-      description: 'Neuer Artikel wurde gespeichert.',
+      subtitle: 'Neuer Artikel wurde gespeichert.',
       requestBody: { name, quantity },
       responseBody: payload,
       headers: responseHeaders,
@@ -262,7 +277,7 @@ const addItem = async (name, quantity) => {
             status: error.meta?.status,
       statusText: error.meta?.statusText,
       title: 'Fehler bei POST /items',
-      description: error.message,
+      subtitle: error.message,
       requestBody: error.meta?.requestBody,
       responseBody: error.meta?.responseBody,
       headers: error.meta?.headers || [],
@@ -273,7 +288,7 @@ const addItem = async (name, quantity) => {
 
 const updateItem = async (id, name, quantity) => {
   try {
-    const endpoint = `${apiRoot}/items/${id}`;
+    const endpoint = itemById(id);
     const res = await fetch(endpoint, {
       method: 'PUT',
       headers: {
@@ -304,7 +319,7 @@ const updateItem = async (id, name, quantity) => {
             status: res.status,
             statusText: res.statusText,
       title: `PUT /items/${id}`,
-      description: 'Artikel wurde erfolgreich angepasst.',
+      subtitle: 'Artikel wurde erfolgreich angepasst.',
       requestBody: { name, quantity },
       responseBody: payload,
       headers: responseHeaders,
@@ -314,11 +329,11 @@ const updateItem = async (id, name, quantity) => {
         showStatus(error.message, true);
         openModal({
             method: error.meta?.method || 'PUT',
-            url: error.meta?.url || `${apiRoot}/items/${id}`,
+      url: error.meta?.url || endpoint,
             status: error.meta?.status,
             statusText: error.meta?.statusText,
       title: `Fehler bei PUT /items/${id}`,
-      description: error.message,
+      subtitle: error.message,
       requestBody: error.meta?.requestBody,
       responseBody: error.meta?.responseBody,
       headers: error.meta?.headers || [],
@@ -329,7 +344,7 @@ const updateItem = async (id, name, quantity) => {
 
 const deleteItem = async (id) => {
   try {
-    const endpoint = `${apiRoot}/items/${id}`;
+    const endpoint = itemById(id);
     const res = await fetch(endpoint, {
       method: 'DELETE',
     });
@@ -355,7 +370,7 @@ const deleteItem = async (id) => {
             status: res.status,
             statusText: res.statusText,
       title: `DELETE /items/${id}`,
-      description: 'Artikel wurde entfernt.',
+      subtitle: 'Artikel wurde entfernt.',
       responseBody: payload,
       headers: responseHeaders,
     });
@@ -364,11 +379,11 @@ const deleteItem = async (id) => {
         showStatus(error.message, true);
         openModal({
             method: error.meta?.method || 'DELETE',
-            url: error.meta?.url || `${apiRoot}/items/${id}`,
+      url: error.meta?.url || endpoint,
             status: error.meta?.status,
       statusText: error.meta?.statusText,
       title: `Fehler bei DELETE /items/${id}`,
-      description: error.message,
+      subtitle: error.message,
       responseBody: error.meta?.responseBody,
       headers: error.meta?.headers || [],
       isError: true,
@@ -476,10 +491,11 @@ const triggerBadRequest = async () => {
         status: res.status,
         statusText: res.statusText,
         title: 'POST /items (Demo)',
-        description: 'Diese Anfrage sollte eigentlich scheitern, zeigte aber eine erfolgreiche Antwort.',
+        subtitle: 'Demo sendet absichtlich falsche Daten – hier wurde nichts abgelehnt.',
         requestBody: invalidBody,
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -490,10 +506,11 @@ const triggerBadRequest = async () => {
       status: res.status,
       statusText: res.statusText,
       title: '400 BAD REQUEST',
-      description: 'Der Server verwirft Payloads, die das erwartete Schema verletzen (HTTP 400).',
+      subtitle: 'Ungültige Client-Anfrage: Pflichtfelder oder Datentypen verletzen das Schema.',
       requestBody: invalidBody,
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -502,9 +519,10 @@ const triggerBadRequest = async () => {
             method: 'POST',
             url: itemsEndpoint,
       title: 'Fehler bei 400-Demo',
-      description: error.message,
+      subtitle: error.message,
       requestBody: invalidBody,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
     }
@@ -524,9 +542,10 @@ const triggerUnauthorized = async () => {
         status: res.status,
         statusText: res.statusText,
         title: 'GET /items (Demo)',
-        description: 'Diese Demo sollte einen 401 liefern, hat aber geklappt.',
+        subtitle: 'Demo ohne Authentifizierung – hier unerwartet erfolgreich.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -537,9 +556,10 @@ const triggerUnauthorized = async () => {
       status: res.status,
       statusText: res.statusText,
       title: '401 UNAUTHORIZED',
-      description: 'Die Ressource fordert eine gültige Client-Authentifizierung (HTTP 401).',
+      subtitle: 'Nicht autorisiert: Ressource verlangt gültige Authentifizierung vom Client.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -548,8 +568,9 @@ const triggerUnauthorized = async () => {
             method: 'GET',
             url: endpoint,
       title: 'Fehler bei 401-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
   }
@@ -569,9 +590,10 @@ const triggerForbidden = async () => {
         status: res.status,
         statusText: res.statusText,
         title: 'GET /items (Demo)',
-        description: 'Diese Demo sollte einen 403 liefern, hat aber geklappt.',
+        subtitle: 'Demo mit Benutzer ohne Rechte – hier unerwartet erfolgreich.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -582,9 +604,10 @@ const triggerForbidden = async () => {
       status: res.status,
       statusText: res.statusText,
       title: '403 FORBIDDEN',
-      description: 'Die Berechtigungsprüfung verweigert den Zugriff trotz Authentifizierung (HTTP 403).',
+      subtitle: 'Verboten: Authentifizierter Client besitzt keine Berechtigung für diese Ressource.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -593,43 +616,56 @@ const triggerForbidden = async () => {
             method: 'GET',
             url: endpoint,
       title: 'Fehler bei 403-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
   }
 };
 
 const triggerNotFound = async () => {
-  const endpoint = `${apiRoot}/items/999999`;
+  const endpoint = itemById(999999);
   try {
     const res = await fetch(endpoint, { method: 'DELETE' });
     const responseHeaders = headersToArray(res.headers);
     const payload = await res.json().catch(() => ({}));
     if (res.ok) {
       showStatus('Unerwartet: 404-Demo lieferte Erfolg.');
-            openModal({
-                method: 'DELETE',
-                url: endpoint,
-                status: res.status,
-                statusText: res.statusText,
+      openModal({
+        method: 'DELETE',
+        url: endpoint,
+        status: res.status,
+        statusText: res.statusText,
         title: 'DELETE (Demo)',
-        description: 'Die Demo wollte ein 404 zeigen, stattdessen kam eine erfolgreiche Antwort.',
+        subtitle: 'DELETE auf ID 999999 – hier sollte eigentlich ein 404 kommen.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
+        image: {
+          src: 'img/404-placeholder.png',
+          alt: '404 Illustration',
+          caption: 'Demo-Illustration: ID 999999 existiert nicht.',
+        },
       });
       return;
     }
-        showStatus('404-Demo ausgelöst');
-        openModal({
-            method: 'DELETE',
-            url: endpoint,
+    showStatus('404-Demo ausgelöst');
+    openModal({
+      method: 'DELETE',
+      url: endpoint,
       status: res.status,
       statusText: res.statusText,
       title: '404 NOT FOUND',
-      description: 'Die adressierte Ressource existiert unter dieser URI nicht (HTTP 404).',
+      subtitle: 'Nicht gefunden: Unter der URI existiert keine Ressource.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
+      image: {
+        src: 'img/404-placeholder.png',
+        alt: '404 Illustration',
+        caption: 'Demo 404: Ressource wurde nicht gefunden.',
+      },
       isError: true,
     });
   } catch (error) {
@@ -638,8 +674,14 @@ const triggerNotFound = async () => {
             method: 'DELETE',
             url: endpoint,
       title: 'Fehler bei 404-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
+      image: {
+        src: 'img/404-placeholder.png',
+        alt: '404 Illustration',
+        caption: 'Demo 404 meldete einen Fehler.',
+      },
       isError: true,
     });
   }
@@ -659,9 +701,10 @@ const triggerServerError = async () => {
                 status: res.status,
                 statusText: res.statusText,
         title: 'GET /items (Demo)',
-        description: 'Diese Anfrage sollte fehlschlagen, lieferte aber einen Erfolg.',
+        subtitle: 'Demo triggert eine ungefangene Ausnahme – hier trat sie nicht auf.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -672,9 +715,10 @@ const triggerServerError = async () => {
             status: res.status,
       statusText: res.statusText,
       title: '500 INTERNAL SERVER ERROR',
-      description: 'Das Backend erzeugt absichtlich eine ungefangene Ausnahme (HTTP 500).',
+      subtitle: 'Interner Serverfehler – ungefangene Exception.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -683,8 +727,9 @@ const triggerServerError = async () => {
             method: 'GET',
             url: endpoint,
       title: 'Fehler bei 500-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
   }
@@ -704,9 +749,10 @@ const triggerBadGateway = async () => {
                 status: res.status,
                 statusText: res.statusText,
         title: 'GET /items (Demo)',
-        description: 'Diese Demo sollte einen 502 liefern, hat aber geklappt.',
+        subtitle: 'Gateway-Demo sollte versagen – hier nicht passiert.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -717,9 +763,10 @@ const triggerBadGateway = async () => {
             status: res.status,
       statusText: res.statusText,
       title: '502 BAD GATEWAY',
-      description: 'Proxy oder API-Gateway erhielt eine ungültige Antwort vom Upstream-Service (HTTP 502).',
+      subtitle: 'Bad Gateway – Upstream-Service lieferte eine ungültige Antwort.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -728,8 +775,9 @@ const triggerBadGateway = async () => {
             method: 'GET',
             url: endpoint,
       title: 'Fehler bei 502-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
   }
@@ -749,9 +797,10 @@ const triggerServiceUnavailable = async () => {
                 status: res.status,
                 statusText: res.statusText,
         title: 'GET /items (Demo)',
-        description: 'Diese Demo sollte einen 503 liefern, hat aber geklappt.',
+        subtitle: 'Wartungs-Demo sollte 503 liefern – hier erfolgreich.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -762,9 +811,10 @@ const triggerServiceUnavailable = async () => {
             status: res.status,
       statusText: res.statusText,
       title: '503 SERVICE UNAVAILABLE',
-      description: 'Service signalisiert temporäre Nichtverfügbarkeit, z. B. Wartung oder Überlast (HTTP 503).',
+      subtitle: 'Service Unavailable – Dienst temporär nicht erreichbar.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -773,8 +823,9 @@ const triggerServiceUnavailable = async () => {
             method: 'GET',
             url: endpoint,
       title: 'Fehler bei 503-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
   }
@@ -794,9 +845,10 @@ const triggerTeapot = async () => {
         status: res.status,
         statusText: res.statusText,
         title: 'GET /items (Demo)',
-        description: 'Diese Demo sollte einen Teapot-Status liefern, hat aber geklappt.',
+        subtitle: 'Teapot-Demo sollte 418 liefern – hier erfolgreich.',
         responseBody: payload,
         headers: responseHeaders,
+        showStatusMeta: false,
       });
       return;
     }
@@ -807,9 +859,10 @@ const triggerTeapot = async () => {
       status: res.status,
       statusText: res.statusText,
       title: "418 I'M A TEAPOT",
-      description: 'RFC‑2324 Status – demonstriert Clients den Umgang mit nicht standardisierten Codes.',
+      subtitle: 'Legendärer RFC-Status (418), war ein Aprilscherz von 1998. wird tatsächlich von einigen APIs als easterEgg verwendet.',
       responseBody: payload,
       headers: responseHeaders,
+      showStatusMeta: false,
       isError: true,
     });
   } catch (error) {
@@ -818,8 +871,9 @@ const triggerTeapot = async () => {
       method: 'GET',
       url: endpoint,
       title: 'Fehler bei 418-Demo',
-      description: error.message,
+      subtitle: error.message,
       headers: [],
+      showStatusMeta: false,
       isError: true,
     });
   }
