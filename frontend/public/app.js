@@ -1,8 +1,12 @@
-const apiRoot =
-    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:3000'
-        : 'http://backend:3000';
-const itemsEndpoint = `${apiRoot}/items`;
+const localHosts = new Set(['localhost', '127.0.0.1']);
+const shouldUseProxy =
+  localHosts.has(window.location.hostname) && window.location.port && window.location.port !== '3000';
+const apiRoot = shouldUseProxy
+  ? ''
+  : localHosts.has(window.location.hostname)
+    ? 'http://localhost:3000'
+    : 'http://backend:3000';
+const itemsEndpoint = shouldUseProxy ? '/items' : `${apiRoot}/items`;
 
 const fetchBtn = document.getElementById('fetch-btn');
 const itemsContainer = document.getElementById('items');
